@@ -1,0 +1,29 @@
+# Maven / Java
+target/
+*.class
+*.log
+*.jar
+*.war
+*.ear
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Node / Next.js (adjust if your frontend folder name is different)
+ui/node_modules/
+ui/.next/
+ui/out/
+ui/build/
+ui/dist/
+ui/.env
+
+# General editor swap files
+*.swp
+*~
