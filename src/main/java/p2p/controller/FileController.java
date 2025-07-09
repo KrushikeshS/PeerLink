@@ -10,6 +10,7 @@ import p2p.service.FileSharer;
 import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -98,48 +99,55 @@ public class FileController {
 
         public ParseResult parse(){
             try{
-                String dataAsString = new String(data);
-                String fileNameMarker = "filename=\"";
-                int filenameStart = dataAsString.indexOf(fileNameMarker);
-                if(filenameStart == -1){
+                byte[] headerSeparator = {13,10,13,10};
+                int headerEndIndex = findSequence(data,headerSeparator,0);
+                if(headerEndIndex==-1){
+                    System.err.println("MultipartParser: Header separator (\\r\\n\\r\\n) not found.");
                     return null;
                 }
-                filenameStart += fileNameMarker.length();
-                int filenameEnd = dataAsString.indexOf("\"");
-                String filename = dataAsString.substring(filenameStart,filenameStart);
 
-                String contentTypeMarker = "Content-Type: ";
-                int contentTypeStart = dataAsString.indexOf(contentTypeMarker,filenameEnd);
+                int contentStartIndex = headerEndIndex + headerSeparator.length;
+
+                String headers = new String(data,0,headerEndIndex);
+
+                String filename = "unnamed-file";
+                String filenameMarker = "filename=\"";
+                int filenameStart = headers.indexOf(filenameMarker);
+                if (filenameStart != -1) {
+                    filenameStart += filenameMarker.length();
+                    int filenameEnd = headers.indexOf("\"", filenameStart);
+                    if (filenameEnd != -1) {
+                        filename = headers.substring(filenameStart, filenameEnd);
+                    }
+                }
+
                 String contentType = "application/octet-stream";
-
-                if(contentTypeStart != -1){
+                String contentTypeMarker = "Content-Type: ";
+                int contentTypeStart = headers.indexOf(contentTypeMarker);
+                if (contentTypeStart != -1) {
                     contentTypeStart += contentTypeMarker.length();
-                    int contentTypeEnd = dataAsString.indexOf("\r\n",contentTypeStart);
-                    contentType = dataAsString.substring(contentTypeStart,contentTypeEnd);
+                    int contentTypeEnd = headers.indexOf("\r\n", contentTypeStart);
+                    if (contentTypeEnd != -1) {
+                        contentType = headers.substring(contentTypeStart, contentTypeEnd).trim();
+                    } else {
+                        contentType = headers.substring(contentTypeStart).trim();
+                    }
                 }
 
-                String headerEndMarker = "\r\n\r\n";
-                int headerEnd = dataAsString.indexOf(headerEndMarker);
-                if(headerEnd == -1){
-                    return null;
-                }
-
-                int contentStart = headerEnd + headerEndMarker.length();
-
-                byte[] boundaryBytes = ("\r\n--" + boundary + "--").getBytes();
-                int contentEnd = findSequence(data,boundaryBytes,contentStart);
+                byte[] finalBoundarySeparator = ("\r\n--" + boundary + "--").getBytes();
+                int contentEnd = findSequence(data,finalBoundarySeparator,contentStartIndex);
 
                 if(contentEnd == -1){
-                    boundaryBytes = ("\r\n--" + boundary).getBytes();
-                    contentEnd = findSequence(data,boundaryBytes,contentStart);
+                    byte[] partBoundarySeparator = ("\r\n--" + boundary).getBytes();
+                    contentEnd = findSequence(data,partBoundarySeparator,contentStartIndex);
                 }
 
-                if(contentEnd == -1 || contentEnd <= contentStart){
+                if(contentEnd == -1 || contentEnd <= contentStartIndex){
+                    System.err.println("MultipartParser: Content end boundary not found.");
                     return null;
                 }
 
-                byte[] fileContent = new byte[contentEnd - contentStart];
-                System.arraycopy(data, contentStart, fileContent, 0, fileContent.length);
+                byte[] fileContent = Arrays.copyOfRange(data, contentStartIndex, contentEnd);
                 return new ParseResult(filename,contentType,fileContent);
             }catch (Exception ex){
                 System.err.println("Error parsing multipart data: " + ex.getMessage());
