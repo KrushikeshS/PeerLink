@@ -4,6 +4,7 @@ import p2p.utils.UploadUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -11,8 +12,10 @@ import java.util.HashMap;
 
 public class FileSharer {
     private HashMap<Integer,String> availableFiles;
+    private final HashMap<String, Long> fileUploadTimes = new HashMap<>();
 
-     public FileSharer(){
+
+    public FileSharer(){
          availableFiles = new HashMap<>();
      }
 
@@ -22,6 +25,12 @@ public class FileSharer {
              port = UploadUtils.generateCode();
              if(!availableFiles.containsKey(port)){
                  availableFiles.put(port,filePath);
+                 try {
+                     String canonicalPath = new File(filePath).getCanonicalPath();
+                     fileUploadTimes.put(canonicalPath, System.currentTimeMillis());
+                 } catch (IOException e) {
+                     System.err.println("Error getting canonical path: " + e.getMessage());
+                 }
                  return port;
              }
          }
@@ -44,11 +53,38 @@ public class FileSharer {
          }
      }
 
-     public void removeFilePath(String path){
-         availableFiles.entrySet().removeIf(entry -> entry.getValue().equals(path));
-     }
+    public void removeFilePath(String path){
+        try {
+            String canonicalPath = new File(path).getCanonicalPath();
+            availableFiles.entrySet().removeIf(entry -> {
+                try {
+                    return new File(entry.getValue()).getCanonicalPath().equals(canonicalPath);
+                } catch (IOException e) {
+                    return false;
+                }
+            });
+        } catch (IOException e) {
+            System.err.println("Error resolving canonical path for removal: " + e.getMessage());
+        }
+    }
 
-     private static  class FileSenderHandler implements  Runnable{
+    public Long getUploadTime(String path) {
+        try {
+            return fileUploadTimes.get(new File(path).getCanonicalPath());
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public void removeUploadTimestamp(String path) {
+        try {
+            fileUploadTimes.remove(new File(path).getCanonicalPath());
+        } catch (IOException e) {
+            // Ignore
+        }
+    }
+
+    private static  class FileSenderHandler implements  Runnable{
          private final Socket clientSocket;
          private final String filePath;
          private final FileSharer fileSharer;
@@ -78,6 +114,9 @@ public class FileSharer {
                  if (fileToDelete.delete()) {
                      System.out.println("File deleted successfully: " + fileName);
                      fileSharer.removeFilePath(filePath);
+                     fileSharer.removeUploadTimestamp(filePath);
+
+
                  } else {
                      System.err.println("Failed to delete file: " + fileName);
                  }

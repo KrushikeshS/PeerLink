@@ -54,7 +54,7 @@ public class FileController {
             }catch (Exception ex){
                 System.err.println("Error during cleanup "+ ex.getMessage());
             }
-        },30,30, TimeUnit.MINUTES);
+        },2,2, TimeUnit.MINUTES);
     }
 
     public void stop(){
@@ -84,21 +84,28 @@ public class FileController {
         if(files == null) return;
 
         long now = System.currentTimeMillis();
-        long cutoff = now - (30 * 60 * 1000L);
+        long cutoff = now - (1 * 60 * 1000L);
 
 
-        for(File file:files){
-            if(file.isFile()){
-                long lastModified = file.lastModified();
+        for (File file : files) {
+            if (file.isFile()) {
+                try {
+                    String canonicalPath = file.getCanonicalPath();
+                    Long uploadTime = fileSharer.getUploadTime(canonicalPath);
 
-                if(lastModified < cutoff){
-                    boolean deleted = file.delete();
-                    if (deleted) {
-                        System.out.println("Deleted old file: " + file.getName());
-                        fileSharer.removeFilePath(file.getAbsolutePath());
-                    }else{
-                        System.out.println("Failed to delete: " + file.getName());
+                    if (uploadTime != null && uploadTime < cutoff) {
+                        boolean deleted = file.delete();
+                        if (deleted) {
+                            System.out.println("Deleted old file: " + file.getName());
+                            fileSharer.removeFilePath(canonicalPath);
+                            fileSharer.removeUploadTimestamp(canonicalPath);
+                        } else {
+                            System.out.println("Failed to delete: " + file.getName());
+                        }
                     }
+                } catch (IOException e) {
+                    System.err.println("Error handling file during cleanup: " + e.getMessage());
+                    e.printStackTrace();
                 }
             }
         }
@@ -295,6 +302,7 @@ public class FileController {
                 }
 
                 int port = fileSharer.offerFile(filePath);
+
 
                 new Thread(() -> fileSharer.startFileServer(port)).start();
 
