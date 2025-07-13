@@ -14,18 +14,23 @@ import java.util.Arrays;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class FileController {
     private final FileSharer fileSharer;
     private final HttpServer server;
     private final String uploadDir;
     private final ExecutorService executorService;
+    private final ScheduledExecutorService cleanScheduler = Executors.newSingleThreadScheduledExecutor();
 
     public FileController(int port) throws IOException {
         this.fileSharer = new FileSharer();
         this.server = HttpServer.create(new InetSocketAddress(port),0);
         this.uploadDir = System.getProperty("java.io.tmpdir") + File.separator + "peerlink-uploads";
-        this.executorService = Executors.newFixedThreadPool(10);
+        this.executorService = Executors.newFixedThreadPool(40);
+
+        System.out.println("Upload directory is: " + this.uploadDir);
 
         File uploadDirFile = new File(uploadDir);
         if(!uploadDirFile.exists()){
@@ -41,12 +46,62 @@ public class FileController {
     public void start(){
         server.start();
         System.out.println("API server startex on port " + server.getAddress().getPort());
+
+        cleanScheduler.scheduleAtFixedRate(()->{
+            try{
+                System.out.println("Running periodic cleanup");
+                cleanupOldFiles();
+            }catch (Exception ex){
+                System.err.println("Error during cleanup "+ ex.getMessage());
+            }
+        },30,30, TimeUnit.MINUTES);
     }
 
     public void stop(){
         server.stop(0);
         executorService.shutdown();
+
+        cleanScheduler.shutdown();
+        try{
+            if(!cleanScheduler.awaitTermination(5,TimeUnit.SECONDS)){
+                cleanScheduler.shutdownNow();
+            }
+        }catch (InterruptedException ex){
+            cleanScheduler.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+
         System.out.println("API Server stopped");
+    }
+
+    private void cleanupOldFiles(){
+        File dir = new File(uploadDir);
+        if(!dir.exists() || !dir.isDirectory()){
+            return;
+        }
+
+        File[] files = dir.listFiles();
+        if(files == null) return;
+
+        long now = System.currentTimeMillis();
+        long cutoff = now - (30 * 60 * 1000L);
+
+
+        for(File file:files){
+            if(file.isFile()){
+                long lastModified = file.lastModified();
+
+                if(lastModified < cutoff){
+                    boolean deleted = file.delete();
+                    if (deleted) {
+                        System.out.println("Deleted old file: " + file.getName());
+                        fileSharer.removeFilePath(file.getAbsolutePath());
+                    }else{
+                        System.out.println("Failed to delete: " + file.getName());
+                    }
+                }
+            }
+        }
     }
 
     private class CORSHandler implements HttpHandler{

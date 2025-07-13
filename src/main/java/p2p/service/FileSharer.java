@@ -38,19 +38,25 @@ public class FileSharer {
              System.out.println("Serving File "+ new File(filePath).getName());
              Socket clientSocket = serverSocket.accept();
              System.out.println("Client Connection: " + clientSocket.getInetAddress());
-             new Thread(new FileSenderHandler(clientSocket,filePath)).start();
+             new Thread(new FileSenderHandler(clientSocket,filePath,this)).start();
          }catch (Exception ex){
              System.out.println("Error handling file server on port: " + port);
          }
      }
 
+     public void removeFilePath(String path){
+         availableFiles.entrySet().removeIf(entry -> entry.getValue().equals(path));
+     }
+
      private static  class FileSenderHandler implements  Runnable{
          private final Socket clientSocket;
          private final String filePath;
+         private final FileSharer fileSharer;
 
-         public FileSenderHandler(Socket clientSocket, String filePath) {
+         public FileSenderHandler(Socket clientSocket, String filePath, FileSharer fileSharer) {
              this.clientSocket = clientSocket;
              this.filePath = filePath;
+             this.fileSharer = fileSharer;
          }
 
          @Override
@@ -67,6 +73,14 @@ public class FileSharer {
                      oos.write(buffer,0,byteRead);
                  }
                  System.out.println("File " + fileName + " sent to " + clientSocket.getInetAddress());
+
+                 File fileToDelete = new File(filePath);
+                 if (fileToDelete.delete()) {
+                     System.out.println("File deleted successfully: " + fileName);
+                     fileSharer.removeFilePath(filePath);
+                 } else {
+                     System.err.println("Failed to delete file: " + fileName);
+                 }
              }catch (Exception ex){
                  System.err.println("Error sending file to the client " + ex.getMessage() );
              }finally {
