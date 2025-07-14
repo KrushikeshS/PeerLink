@@ -54,7 +54,7 @@ public class FileController {
             }catch (Exception ex){
                 System.err.println("Error during cleanup "+ ex.getMessage());
             }
-        },2,2, TimeUnit.MINUTES);
+        },30,30, TimeUnit.MINUTES);
     }
 
     public void stop(){
@@ -84,7 +84,7 @@ public class FileController {
         if(files == null) return;
 
         long now = System.currentTimeMillis();
-        long cutoff = now - (1 * 60 * 1000L);
+        long cutoff = now - (30 * 60 * 1000L);
 
 
         for (File file : files) {
@@ -365,10 +365,30 @@ public class FileController {
                         String header = headerBaos.toString().trim();
                         if(header.startsWith("Filename: ")){
                             filename = header.substring("Filename: ".length());
+                        }else{
+                            tempFile.delete();
+                            String response = "File no longer available";
+                            exchange.sendResponseHeaders(404, response.getBytes().length);
+                            try(OutputStream os = exchange.getResponseBody()){
+                                os.write(response.getBytes());
+                            }
+                            return;
                         }
 
+                        long totalBytesRead = 0;
                         while((bytesRead = socketInput.read(buffer)) != -1){
                             fos.write(buffer,0,bytesRead);
+                            totalBytesRead += bytesRead;
+                        }
+
+                        if(totalBytesRead == 0) {
+                            tempFile.delete();
+                            String response = "File no longer available";
+                            exchange.sendResponseHeaders(404, response.getBytes().length);
+                            try(OutputStream os = exchange.getResponseBody()){
+                                os.write(response.getBytes());
+                            }
+                            return;
                         }
                     }
 

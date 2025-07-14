@@ -97,28 +97,37 @@ public class FileSharer {
 
          @Override
          public void run(){
-             try(FileInputStream fis = new FileInputStream(filePath)){
-                 OutputStream oos = clientSocket.getOutputStream();
-                 String fileName = new File(filePath).getName();
-                 String header  = "Filename: " + fileName + "\n";
-                 oos.write(header.getBytes());
-
-                 byte[] buffer = new byte[4096];
-                 int byteRead;
-                 while((byteRead = fis.read(buffer)) != -1){
-                     oos.write(buffer,0,byteRead);
+             try {
+                 // Check if file exists FIRST
+                 File file = new File(filePath);
+                 if (!file.exists()) {
+                     System.err.println("File no longer exists: " + filePath);
+                     return; // Don't send anything
                  }
-                 System.out.println("File " + fileName + " sent to " + clientSocket.getInetAddress());
 
-                 File fileToDelete = new File(filePath);
-                 if (fileToDelete.delete()) {
-                     System.out.println("File deleted successfully: " + fileName);
-                     fileSharer.removeFilePath(filePath);
-                     fileSharer.removeUploadTimestamp(filePath);
+                 // Now safely create FileInputStream
+                 try(FileInputStream fis = new FileInputStream(filePath)){
+                     OutputStream oos = clientSocket.getOutputStream();
 
+                     String fileName = file.getName();
+                     String header  = "Filename: " + fileName + "\n";
+                     oos.write(header.getBytes());
 
-                 } else {
-                     System.err.println("Failed to delete file: " + fileName);
+                     byte[] buffer = new byte[4096];
+                     int byteRead;
+                     while((byteRead = fis.read(buffer)) != -1){
+                         oos.write(buffer,0,byteRead);
+                     }
+                     System.out.println("File " + fileName + " sent to " + clientSocket.getInetAddress());
+
+                     // Delete after successful send
+                     if (file.delete()) {
+                         System.out.println("File deleted successfully: " + fileName);
+                         fileSharer.removeFilePath(filePath);
+                         fileSharer.removeUploadTimestamp(filePath);
+                     } else {
+                         System.err.println("Failed to delete file: " + fileName);
+                     }
                  }
              }catch (Exception ex){
                  System.err.println("Error sending file to the client " + ex.getMessage() );
@@ -130,5 +139,6 @@ public class FileSharer {
                  }
              }
          }
-     }
+
+    }
 }
