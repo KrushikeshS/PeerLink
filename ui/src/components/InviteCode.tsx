@@ -22,7 +22,7 @@ export default function InviteCode({ port }: InviteCodeProps) {
     <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
       <h3 className="text-lg font-medium text-green-800">File Ready to Share!</h3>
       <p className="text-sm text-green-600 mb-3">
-        Share this invite code with anyone you want to share the file with:
+        Share this teleport code with anyone you want to send the file to:
       </p>
       
       <div className="flex items-center">
