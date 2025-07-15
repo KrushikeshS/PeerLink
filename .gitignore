@@ -27,3 +27,16 @@ ui/.env
 # General editor swap files
 *.swp
 *~
+
+# Ignore generated SSL certificates and private keys
+nginx/certs/fullchain.pem
+nginx/certs/privkey.pem
+
+# Ignore Certbot challenge files
+data/certbot/www/
+
+# Ignore any other sensitive or build-related files (e.g., node_modules, target directories, .env files)
+node_modules/
+.env
+target/
+*.jar
